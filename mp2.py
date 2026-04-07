@@ -19,6 +19,14 @@ Description:
 
 """
 
+'''
+Name: Savannah Stumpf
+Date: 4/6/2026
+Course Name: Artificial Intelligence
+Semester: Spring 2026
+Assignment Name: Machine Problem 2
+'''
+
 import numpy as np
 import random
 import math
@@ -108,13 +116,11 @@ class GenGameBoard:
         
         print("-")
     
-    def make_move(self, action, player_move, check = True):
+    def make_move(self, action, player_move):
         """
         Makes the move for either player or monster
         """  
-        # adding a check to avoid assertion error:
-        if check == True:
-            assert action in self.get_actions(player_move)
+        assert action in self.get_actions(player_move)
         
         # Make the move
         if player_move:
@@ -135,9 +141,9 @@ class GenGameBoard:
             elif action==self.RIGHT_BUILD:
                 self.marks[self.player_pos[0], self.player_pos[1]+1] = '#'
             self.num_moves = self.num_moves + 1
-            # Check for gold co-location (updated to not use the global board)    
-            if not self.has_gold and self.player_pos==self.gold_pos:
-                self.has_gold = True
+            # Check for gold co-location
+            if not board.has_gold and board.player_pos==board.gold_pos:
+                board.has_gold = True
                 self.move_when_grabbed_gold = self.num_moves
         else:
             if action==self.UP:
@@ -208,7 +214,7 @@ class GenGameBoard:
             'has_gold': self.has_gold,
             'num_moves': self.num_moves,
             'move_when_grabbed_gold': self.move_when_grabbed_gold,
-            'marks': [row[:] for row in self.marks]
+            'marks': self.marks.copy()
         }
         return state
     
@@ -219,10 +225,7 @@ class GenGameBoard:
         self.has_gold = state['has_gold']
         self.num_moves = state['num_moves']
         self.move_when_grabbed_gold = state['move_when_grabbed_gold']
-        
-        for i in range(self.board_size):
-            for j in range(self.board_size):
-                self.marks[i][j] = state['marks'][i][j]
+        self.marks[:, :] = state['marks']
     
     # Determining the move of the monster:
     def alpha_beta_search(self):
@@ -250,13 +253,14 @@ class GenGameBoard:
             score += gold_distance # farther gold distance from player will be a higher score for the monster
         
         exit_distance = abs(self.exit_pos[0] - self.player_pos[0]) + abs(self.exit_pos[1] - self.player_pos[1])
-        score += exit_distance
+        score += exit_distance # the monster also has a higher score if player if further from exit
         
         return score
             
     # Maximizing the monster's turn:        
     def max_value(self, alpha, beta, depth): 
-        
+        self.depth_reached = max(self.depth_reached, depth)
+
         # Checking if the game is terminated:
         if self.game_won(False) or self.no_more_moves(False) or depth == self.MAX_DEPTH:
             return self.evaluate(), None
@@ -266,7 +270,7 @@ class GenGameBoard:
         
         for action in self.get_actions(False):
             current_state = self.save_current_state()
-            self.make_move(action, False, False)
+            self.make_move(action, False)
             v2, move = self.min_value(alpha, beta, depth + 1)
             self.backtrack(current_state)
             
@@ -278,6 +282,7 @@ class GenGameBoard:
             
             # pruning:
             if v >= beta:
+                self.num_pruned += 1
                 break 
         
         return v, best_action    
@@ -285,28 +290,28 @@ class GenGameBoard:
             
     # Minimizing the player's turn:
     def min_value(self, alpha, beta, depth):
-        
+        self.depth_reached = max(self.depth_reached, depth)
+
         # Checking to see if the game is terminated:
         if self.game_won(True) or self.no_more_moves(True) or depth == self.MAX_DEPTH:
             return self.evaluate(), None
         
         v = math.inf
-        #best_action = None
         
         for action in self.get_actions(True):
             current_state = self.save_current_state()
-            self.make_move(action, True, False)
+            self.make_move(action, True)
             v2, move = self.max_value(alpha, beta, depth + 1)
             self.backtrack(current_state)
             
             if v2 < v:
                 v = v2
-                #best_action = action
                 
             beta = min(beta, v)
             
             # Pruning:
             if v <= alpha:
+                self.num_pruned += 1
                 break
             
         return v, None
@@ -315,7 +320,8 @@ class GenGameBoard:
     # Then make best move for the computer by placing the mark in the best spot
     def make_comp_move(self):
         t1 = time.perf_counter()
-        
+        self.depth_reached = 0
+        self.num_pruned = 0
         # This code chooses a random computer move
         # COMMENT THIS OUT AFTER YOU IMPLEMENT ALPHA-BETA SEARCH
         '''
@@ -326,12 +332,16 @@ class GenGameBoard:
         
         # TODO: Make AI move - UNCOMMENT THIS AFTER YOU IMPLEMENT ALPHA-BETA SEARCH
         best_action = self.alpha_beta_search()
-        print("DEBUG best_action:", best_action)
-        print("DEBUG legal monster moves:", self.get_actions(False))
+        if best_action == None:
+            print("GAME OVER")
+            print("You Lost!")
+            exit()
 
-        self.make_move(best_action, False, True)
+        self.make_move(best_action, False)
 
         te = time.perf_counter() - t1
+        print('DEPTH REACHED: ', self.depth_reached)
+        print('Number pruned due to a/b: ', self.num_pruned)
         print('COMP MOVE TIME =',round(te,2),'seconds')
     
 
